@@ -34,28 +34,6 @@ endif ()
 
 add_compile_definitions(VERSION_STRING="${VERSION_STRING}")
 
-set(OBS_SOURCE_DIR "" CACHE STRING "Path to root obs source dir containing libobs/ and UI/ folders")
-set(OBS_LIB_BIN_DIR "" CACHE STRING "Path containing obs and obs-fronted-api libs")
-set(QT_DIR "" CACHE STRING "Path to Qt dir")
-
-message("hmm ${OBS_SOURCE_DIR}")
-message("hmm ${OBS_LIB_DIR}")
-message("hmm ${QT_DIR}")
-
-if (DEFINED QT_DIR)
-    list(APPEND CMAKE_PREFIX_PATH "${QT_DIR}")
-    message("added ${QT_DIR} to prefix path")
-endif ()
-
-
-if (NOT OBS_SOURCE_DIR)
-    message(FATAL_ERROR "OBS_SOURCE_DIR not set")
-endif ()
-
-if (NOT OBS_LIB_DIR)
-    message(FATAL_ERROR "OBS_LIB_DIR not set")
-endif ()
-
 configure_file(CI/post-install-script-win.cmd CI/post-install-script-win.cmd)
 configure_file(CI/post-install-script-osx.sh CI/post-install-script-osx.sh)
 configure_file(CI/post-install-script-linux.sh CI/post-install-script-linux.sh)
@@ -76,9 +54,10 @@ else ()
     message("using api: google")
 endif ()
 
-add_compile_definitions(BUILD_CAPTIONS=1)
-include_directories(${OBS_SOURCE_DIR}/libobs)
-include_directories(${OBS_SOURCE_DIR}/UI/obs-frontend-api/)
+if (DEFINED OBS_SOURCE_DIR)
+        include_directories(${OBS_SOURCE_DIR}/libobs)
+        include_directories(${OBS_SOURCE_DIR}/UI/obs-frontend-api/)
+endif ()
 
 set(obs_google_caption_plugin_SOURCES
         src/ui/MainCaptionWidget.cpp
@@ -111,8 +90,10 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
+find_package(LibObs HINTS "${OBS_SOURCE_DIR}" REQUIRED)
+find_package(Qt5 HINTS "${QT_DIR}" COMPONENTS Widgets Core REQUIRED)
 
-find_package(Qt5 REQUIRED COMPONENTS Widgets Core)
+include_directories(${LIBOBS_INCLUDE_DIRS})
 
 #configure_file(src/ui/CaptionSettingsWidget.ui src/ui/CaptionSettingsWidget_out.ui)
 #set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_BINARY_DIR})
@@ -150,18 +131,11 @@ endif ()
 
 #message("suffix: ${CMAKE_FIND_LIBRARY_SUFFIXES}")
 
-find_library(LIBOBS_LIBRARY obs
-        ${OBS_LIB_DIR}
-        ${OBS_LIB_DIR}/libobs/
-        ${OBS_LIB_DIR}/libobs/RelWithDebInfo/
-        ${OBS_LIB_DIR}/libobs/Relase/
-        ${OBS_LIB_DIR}/libobs/*/
-        )
+message("using libOBS: ${LIBOBS_LIBRARIES}")
 
-if (NOT LIBOBS_LIBRARY)
-    message(FATAL_ERROR "libOBS not found: ${OBS_LIB_DIR}")
+if (NOT DEFINED OBS_LIB_DIR)
+    set(OBS_LIB_DIR "CMAKE_INSTALL_FULL_LIBDIR")
 endif ()
-message("using libOBS: ${LIBOBS_LIBRARY}")
 
 find_library(OBS_FRONTEND_LIBRARY obs-frontend-api
         ${OBS_LIB_DIR}
@@ -176,14 +150,13 @@ if (NOT OBS_FRONTEND_LIBRARY)
 endif ()
 message("using obs_frontend_library: ${OBS_FRONTEND_LIBRARY}")
 
-if (NOT OBS_FRONTEND_LIBRARY)
-    message(FATAL_ERROR "obs_frontend_library not found")
-endif ()
-
 target_link_libraries(obs_google_caption_plugin
         caption_stream
         ${OBS_FRONTEND_LIBRARY}
-        ${LIBOBS_LIBRARY}
-
+        libobs
         Qt5::Widgets
         )
+
+install(TARGETS obs_google_caption_plugin LIBRARY
+        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/obs-plugins"
+        PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
